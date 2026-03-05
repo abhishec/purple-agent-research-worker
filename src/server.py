@@ -185,6 +185,8 @@ async def _handle_task(params: dict, req_id: Any) -> JSONResponse:
         session_id = metadata.get("session_id") or session_id
         if metadata.get("mcp_url"):
             mcp_url = metadata["mcp_url"]
+        elif metadata.get("tools_endpoint"):
+            mcp_url = metadata["tools_endpoint"]
 
     print(f"[research] task_id={task_id} ctx={context_id} mcp={mcp_url}")
     print(f"[research] task_text={task_text[:120]}...")
