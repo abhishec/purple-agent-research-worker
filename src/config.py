@@ -13,4 +13,5 @@ MAIN_MODEL: str = os.environ.get("MAIN_MODEL", "claude-sonnet-4-5")
 # Timeouts
 TOOL_TIMEOUT: int = int(os.environ.get("TOOL_TIMEOUT", "60"))
 LLM_TIMEOUT: int = int(os.environ.get("LLM_TIMEOUT", "120"))
-MAX_TURNS: int = int(os.environ.get("MAX_TURNS", "20"))
+MAX_TURNS: int = int(os.environ.get("MAX_TURNS", "10"))
+TASK_TIMEOUT: int = int(os.environ.get("TASK_TIMEOUT", "110"))

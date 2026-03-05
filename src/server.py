@@ -9,6 +9,7 @@ Architecture: Reflexive Agent — PRIME → EXECUTE → REFLECT
 Domain: Research Agent (academic / news / technical)
 """
 from __future__ import annotations
+import asyncio
 import json
 import os
 import time
@@ -19,7 +20,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.research_brain import run_research_task
-from src.config import GREEN_AGENT_MCP_URL, PORT
+from src.config import GREEN_AGENT_MCP_URL, PORT, TASK_TIMEOUT
 
 app = FastAPI(title="agent-research", version="1.0.0")
 
@@ -189,13 +190,20 @@ async def _handle_task(params: dict, req_id: Any) -> JSONResponse:
     print(f"[research] task_text={task_text[:120]}...")
 
     try:
-        answer, conversation = await run_research_task(
-            task_text=task_text,
-            task_data=task_data,
-            mcp_url=mcp_url,
-            session_id=session_id,
-            conversation=session["conversation"],
+        answer, conversation = await asyncio.wait_for(
+            run_research_task(
+                task_text=task_text,
+                task_data=task_data,
+                mcp_url=mcp_url,
+                session_id=session_id,
+                conversation=session["conversation"],
+            ),
+            timeout=TASK_TIMEOUT,
         )
+    except asyncio.TimeoutError:
+        print(f"[research] TIMEOUT after {TASK_TIMEOUT}s")
+        answer = "Research task timed out. Please try a more focused query."
+        conversation = session["conversation"]
     except Exception as e:
         print(f"[research] ERROR: {e}")
         import traceback
