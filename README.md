@@ -1,96 +1,126 @@
-# Research AI Worker
+# agent-research — BrainOS Mini AI Worker
 
-> One of four **mini AI workers built on BrainOS** — the Reflexive Agent Architecture framework that achieved **3/3 (100%)** on τ²-Bench. Each worker is a lightweight, self-contained cognitive unit that runs the same PRIME → EXECUTE → REFLECT loop tuned to its domain.
-
-**AgentX Phase 2 — Research Agent Track**
-
----
-
-## What This Worker Does
-
-The Research AI Worker connects to any MCP tool server and performs deep-research tasks across academic, news, technical, and general domains. It discovers available tools at runtime, classifies the task domain, injects domain-specific cognitive scaffolding, executes an agentic tool loop with citation tracking, and verifies source quality before answering.
+> **ResearchToolBench · AgentX Phase 2 — Research Track**
+> One of five BrainOS Mini AI Workers — a self-contained research cognitive unit built on the **PRIME → EXECUTE → REFLECT** loop with domain-adaptive intelligence.
 
 ---
 
-## BrainOS Cognitive Loop: PRIME → EXECUTE → REFLECT
+## The Problem
 
-```
-POST /  (A2A JSON-RPC 2.0)
-        │
-        ▼
-    PRIME  ← Reflex Layer
-    ├── Domain detection        (academic / news / technical / general / code)
-    ├── RL primer injection     (top-3 past cases by keyword + domain relevance)
-    ├── DAAO model selection    (Haiku for simple lookups, Sonnet for synthesis)
-    ├── Sequence hint injection (prefix-based tool-call directives per domain)
-    ├── MCP tool discovery      (green agent's tools fetched at runtime)
-    └── Domain system prompt    (citation rules, depth directive, format spec)
-        │
-        ▼
-    EXECUTE  ← LLM Cortex (DAAO: Haiku → Sonnet)
-    ├── Agentic tool loop:  search_ → fetch_ / get_ → cite_ / verify_
-    ├── Recovery cascade    (empty results → inject broadening hint)
-    ├── L3 Citation Contract (academic/news: retry if no citations in answer)
-    ├── Self-reflection     (short answer < 100 chars after tool use → depth retry)
-    └── Budget / constraint pass-through
-        │
-        ▼
-    REFLECT  ← Verification Layer
-    ├── Citation presence audit
-    ├── Quality scoring     (0–1 heuristic: citation bonus, length penalty, error penalty)
-    ├── RL case recording   (case_log.json, last 20 entries, keyword-indexed)
-    └── Structured answer formatting
-```
+Research agents fail in two ways that retrieval-augmented generation alone cannot fix.
+
+**Depth failure.** The agent returns a shallow answer — one source, no synthesis, no citations — because the LLM takes the path of least resistance. There is no mechanism forcing it to go deep before answering.
+
+**Domain blindness.** A single generic prompt cannot simultaneously handle academic literature synthesis (cite papers, track claims), investigative news verification (cross-source, check dates), technical debugging (reproduce, trace, fix), and code review (read context, suggest changes). Each domain has different tool sequences, different quality signals, and different what-counts-as-done criteria.
+
+The result: agents that can search but cannot research.
 
 ---
 
-## Key BrainOS Concepts Applied
+## BrainOS Innovation: Domain-Adaptive Cognitive Scaffolding
 
-### DAAO — Difficulty-Aware Adaptive Orchestration
-Routes each task to the cheapest model that can handle it. Haiku handles simple lookups (`what is`, `define`, `list`) and short tasks (< 12 words with no tools). Sonnet handles academic synthesis, multi-source aggregation, and long-form analysis. Reduces cost on simple tasks while maintaining quality on complex ones.
+The Research AI Worker solves this by running a domain-specific cognitive loop — not a single generic prompt, but a structurally different execution path per research domain, built on BrainOS's PRIME → EXECUTE → REFLECT architecture.
 
-### RL Primer Injection
-Before each task, loads the last 20 completed cases from `case_log.json`. Scores each case by keyword overlap with the current task (Jaccard on 4+ char words) plus domain match bonus (+2.0) plus past quality score. Injects the top-3 most relevant cases as compressed examples into the system prompt, letting the LLM learn from its own execution history without retraining.
+---
 
-### Prefix-Based Sequence Hints
-Injects an ordered tool-call directive into every system prompt. Uses **prefixes** not hardcoded tool names — `search_` or `query_`, then `get_` or `fetch_`, then `cite_` or `references_` — so the directive works across any MCP server whose tools follow naming conventions. Per-domain seeds:
+## Core Technical Innovations
 
-| Domain | Sequence |
+### 1 — DAAO: Difficulty-Aware Adaptive Orchestration
+
+Every task is routed to the cheapest model that can handle it before a single token is spent on execution.
+
+**Fast path (Haiku):** Simple lookups — `"what is"`, `"define"`, `"list"`, tasks under 12 words with no tool requirements. Zero Sonnet cost.
+
+**Deep path (Sonnet):** Academic synthesis, multi-source aggregation, long-form analysis, cross-reference tasks.
+
+The routing decision is deterministic — keyword pattern + task length — so it costs nothing to evaluate. DAAO reduces inference cost on simple tasks while preserving quality on complex ones without any model-quality trade-off.
+
+### 2 — Prefix-Based Sequence Hints (Protocol-Agnostic)
+
+Every research task receives an ordered tool-call directive injected into the system prompt. The critical design: directives use **prefixes**, not hardcoded tool names.
+
+| Domain | Injected Sequence |
 |---|---|
-| `academic` | search_ / query_ → get_ / fetch_ → cite_ / references_ → synthesize |
-| `news` | search_ / find_ → get_ / fetch_ → verify_ / check_ → verdict |
-| `technical` | list_ / check_ → run_ / execute_ → debug_ / fix_ → verify_ |
-| `code` | search_ / find_ → read_ / fetch_ → analyze_ / review_ → suggest_ |
-| `general` | search_ → get_ / fetch_ → summarize_ |
+| `academic` | `search_` / `query_` → `get_` / `fetch_` → `cite_` / `references_` → synthesize |
+| `news` | `search_` / `find_` → `get_` / `fetch_` → `verify_` / `check_` → verdict |
+| `technical` | `list_` / `check_` → `run_` / `execute_` → `debug_` / `fix_` → `verify_` |
+| `code` | `search_` / `find_` → `read_` / `fetch_` → `analyze_` / `review_` → suggest |
+| `general` | `search_` → `get_` / `fetch_` → `summarize_` |
 
-### L3 Citation Contract
-For academic and news tasks with answers > 100 chars, checks whether the answer contains at least one citation signal: `[Author YYYY]`, a bare URL, or `"Source:"`. If absent, re-runs the LLM with an explicit citation directive injected into the last user turn. Deterministic check — zero extra API cost on passing cases.
+Because directives match prefixes against the actual tool names at runtime, the same sequence works across any MCP server regardless of whether the tool is called `search_arxiv`, `search_web`, or `search_pubmed`. Zero hardcoding. Works against any green agent.
 
-### Self-Reflection Retry
-After any tool-use execution, measures answer length. If length < 100 chars, injects a depth directive (`"Your answer is too brief. Add specific details, supporting evidence, and sources."`) and re-runs. Forces the model to expand shallow responses without human intervention.
+### 3 — L3 Citation Contract (Deterministic Quality Enforcement)
 
-### Recovery Cascade
-If a tool result contains `"no results"`, `"not found"`, or `"empty"`, appends a recovery hint to the tool result: `"[RECOVERY HINT: Try broader search terms or alternative spellings. Try the next logical step.]"`. The LLM sees this hint on the next turn and adjusts its search strategy automatically.
+For academic and news tasks producing answers over 100 characters, a deterministic post-execution check verifies that at least one citation signal is present: `[Author YYYY]` pattern, a bare URL, or `"Source:"`. If absent, the L3 contract re-runs the LLM with an explicit citation directive injected into the last user turn.
+
+Cost: zero on passing cases (pure string check). On failure: one targeted retry that adds exactly what was missing. No human intervention. No threshold tuning.
+
+### 4 — Self-Reflection Depth Retry
+
+After any tool-use execution, answer length is measured. If length < 100 characters (the LLM gave a shallow answer despite having tool results), a depth directive is injected and execution re-runs:
+
+> *"Your answer is too brief. Add specific details, supporting evidence, and sources."*
+
+This catches the most common research agent failure: finding the right sources but summarizing them into one sentence.
+
+### 5 — RL Primer Injection
+
+Before each task, the 20 most recent cases are loaded from `case_log.json`. Each is scored by Jaccard keyword overlap with the current task plus domain match bonus (+2.0) plus past quality score. The top-3 most relevant are injected as compressed examples into the system prompt.
+
+The agent sees its own past execution history on every call — what searches worked, what citation formats succeeded, how it handled similar queries. No retraining. Immediate feedback loop.
+
+### 6 — Recovery Cascade
+
+When a tool returns `"no results"`, `"not found"`, or `"empty"`, a recovery hint is appended to the tool result before the LLM's next turn:
+
+> *"[RECOVERY HINT: Try broader search terms or alternative spellings. Try the next logical step.]"*
+
+The LLM sees the hint and broadens its query automatically on the next iteration. This handles the most common research dead-end — an overspecific initial query — without requiring human re-prompting.
 
 ---
 
 ## Supported Research Domains
 
-| Domain | Task Types | Key Tool Prefixes |
+| Domain | Task Types | Key Contracts |
 |---|---|---|
-| `academic` | Literature review, paper synthesis, citation analysis | search_, fetch_, cite_, references_ |
-| `news` | Fact verification, source checking, date verification | search_, find_, verify_, check_ |
-| `technical` | Debugging, troubleshooting, environment checks | list_, check_, run_, debug_, fix_ |
-| `code` | Code review, bug analysis, refactoring suggestions | find_, read_, analyze_, review_ |
-| `general` | Open-ended research, knowledge lookup | search_, get_, summarize_ |
+| `academic` | Literature review, paper synthesis, citation analysis | L3 Citation + Self-Reflection + RL Primer |
+| `news` | Fact verification, source checking, date verification | L3 Citation + Recovery Cascade |
+| `technical` | Debugging, troubleshooting, environment checks | Sequence Hints (list→run→debug→verify) |
+| `code` | Code review, bug analysis, refactoring suggestions | DAAO fast path if simple; Sonnet for deep review |
+| `general` | Open-ended research, knowledge lookup | Recovery Cascade + Self-Reflection |
+
+---
+
+## Cognitive Loop: PRIME → EXECUTE → REFLECT
+
+```
+PRIME
+├── Domain detection        (academic / news / technical / code / general)
+├── RL primer injection     (top-3 past cases by keyword + domain match)
+├── DAAO model selection    (Haiku for simple; Sonnet for synthesis)
+├── Sequence hint injection (prefix-based directives per domain)
+├── MCP tool discovery      (green agent tools fetched at runtime)
+└── Domain system prompt    (citation rules, depth directive, format spec)
+
+EXECUTE
+├── Agentic tool loop:  search_ → fetch_ / get_ → cite_ / verify_
+├── Recovery cascade    (empty results → broadening hint)
+├── L3 Citation Contract (academic/news: retry if no citations)
+└── Self-reflection     (answer < 100 chars after tool use → depth retry)
+
+REFLECT
+├── Citation presence audit
+├── Quality scoring     (citation bonus, length check, error penalty)
+├── RL case recording   (case_log.json, last 20 entries, keyword-indexed)
+└── Structured answer formatting
+```
 
 ---
 
 ## Competition Target
 
-**Primary**: `arunshar/researchtoolbench` — ResearchToolBench
-- 5-dimensional scoring: Tool Use (20%) + Source Citation (20%) + Fact Accuracy (25%) + Policy Compliance (15%) + DB State (20%)
-- 3 domains with τ²-bench style dual-control environments
+**ResearchToolBench** (`arunshar/researchtoolbench`) — 5-dimensional scoring:
+- Tool Use (20%) + Source Citation (20%) + Fact Accuracy (25%) + Policy Compliance (15%) + DB State (20%)
 
 ---
 
@@ -98,92 +128,41 @@ If a tool result contains `"no results"`, `"not found"`, or `"empty"`, appends a
 
 | Module | Role |
 |---|---|
-| `server.py` | FastAPI application; A2A JSON-RPC 2.0 handler |
-| `research_brain.py` | Core cognitive loop: PRIME / EXECUTE / REFLECT; all BrainOS concepts |
-| `mcp_bridge.py` | MCP tool bridge; pre-flight parameter validation; schema patching |
-| `config.py` | Environment configuration; model constants; timeout settings |
+| `server.py` | FastAPI; A2A JSON-RPC 2.0 handler |
+| `research_brain.py` | Core cognitive loop: PRIME / EXECUTE / REFLECT |
+| `mcp_bridge.py` | MCP HTTP; pre-flight validation; schema patching |
+| `config.py` | Environment config; model constants; timeout settings |
 
 ---
 
-## Requirements
+## Quick Start
 
-Python 3.11+
-
-```
-fastapi>=0.115
-uvicorn[standard]>=0.30
-anthropic>=0.34
-httpx>=0.27
-pydantic>=2.0
+```bash
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+export GREEN_AGENT_MCP_URL=http://localhost:9009
+PORT=9011 python3 src/server.py
 ```
 
----
-
-## Configuration
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | — | Claude API key |
-| `GREEN_AGENT_MCP_URL` | Yes | — | MCP tool server base URL |
-| `FALLBACK_MODEL` | No | `claude-sonnet-4-6` | Primary execution model |
-| `FAST_MODEL` | No | `claude-haiku-4-5` | Fast model for DAAO simple routing |
-| `TOOL_TIMEOUT` | No | `10` | Seconds per tool call |
-| `TASK_TIMEOUT` | No | `120` | Seconds per task |
-| `RL_CACHE_DIR` | No | `/app` | Directory for `case_log.json` |
-
----
-
-## Docker
-
+**Docker:**
 ```bash
 docker pull public.ecr.aws/d9m7h3k5/agentbench-research:latest
 docker run -e ANTHROPIC_API_KEY=sk-ant-... \
            -e GREEN_AGENT_MCP_URL=http://green-agent:9009 \
-           -p 9010:9010 \
+           -p 9011:9011 \
            public.ecr.aws/d9m7h3k5/agentbench-research:latest
-```
-
----
-
-## API
-
-All requests use A2A JSON-RPC 2.0.
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/` | POST | `tasks/send` — submit a research task |
-| `/.well-known/agent-card.json` | GET | Agent capability declaration |
-| `/health` | GET | Health check → `{"status":"ok","agent":"research"}` |
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "tasks/send",
-  "id": "task-001",
-  "params": {
-    "id": "task-001",
-    "message": {
-      "role": "user",
-      "parts": [{ "text": "Summarize the latest research on transformer attention mechanisms and cite key papers." }]
-    },
-    "metadata": {
-      "tools_endpoint": "https://mcp.example.com",
-      "session_id": "worker-abc"
-    }
-  }
-}
 ```
 
 ---
 
 ## Tech Stack
 
-- **Runtime:** Python 3.11, FastAPI, uvicorn
-- **LLM:** Anthropic Claude — Haiku for simple lookups (DAAO fast path); Sonnet for synthesis and multi-source aggregation
-- **Architecture:** BrainOS PRIME / EXECUTE / REFLECT cognitive loop
-- **RL:** RL case log (JSON) + quality scoring + RL primer injection
+- **Runtime:** Python 3.11 · FastAPI · uvicorn
+- **LLM:** Claude Haiku (DAAO fast path) · Sonnet (synthesis, multi-source)
+- **Architecture:** BrainOS PRIME / EXECUTE / REFLECT
+- **RL:** Case log (JSON) · quality scoring · RL primer injection
 - **Tool bridge:** MCP HTTP with pre-flight validation
-- **Storage:** Local JSON (`case_log.json` — last 20 entries, keyword-indexed)
+- **Protocol:** A2A JSON-RPC 2.0
 
 ---
 
