@@ -33,6 +33,15 @@ import anthropic
 from src.config import ANTHROPIC_API_KEY, MAIN_MODEL, FAST_MODEL, LLM_TIMEOUT, MAX_TURNS
 from src.mcp_bridge import discover_tools, call_tool
 
+# BrainOS Core Light primitives
+try:
+    from brainos_core import DAAO as _CoreDAOO, CitationContract, DepthContract, RecoveryCascade
+    _daao = _CoreDAOO(fast_model=FAST_MODEL, main_model=MAIN_MODEL)
+    _HAS_CORE = True
+except ImportError:
+    _HAS_CORE = False
+    _daao = None
+
 # ── RL case log ───────────────────────────────────────────────────────────────
 _RL_DIR = Path(os.environ.get("RL_CACHE_DIR", "/app"))
 _CASE_LOG = _RL_DIR / "research_case_log.json"
@@ -160,6 +169,10 @@ def _select_model(task_text: str, domain: str, has_tools: bool) -> str:
     # Technical troubleshooting → Sonnet (needs step-by-step reasoning)
     if domain == "technical":
         return MAIN_MODEL
+
+    # Fall through to core DAAO for general keyword/length routing
+    if _daao is not None:
+        return _daao.route(task_text)
 
     # Default: Sonnet for >30 words, Haiku otherwise
     return MAIN_MODEL if len(words) > 25 else FAST_MODEL
@@ -449,6 +462,9 @@ async def _execute(
                     result_text = result.get("text") or json.dumps(result)
                 except Exception as e:
                     result_text = f"Tool error: {e}"
+                # Recovery cascade: append broadening hint on empty results
+                if _HAS_CORE:
+                    result_text = RecoveryCascade.check(result_text)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -483,20 +499,21 @@ async def _reflect(
     domain = prime_ctx["domain"]
 
     # ── L3: Citation contract (academic / news) ──────────────────────────────
-    if domain in ("academic", "news") and len(answer) > 100:
-        has_citation = bool(
-            re.search(r'\[\w+[^\]]*\d{4}', answer) or
-            re.search(r'https?://', answer) or
-            re.search(r'\(\d{4}\)', answer) or
-            re.search(r'doi:', answer, re.I)
+    if domain in ("academic", "news"):
+        citation_ok = (
+            CitationContract.satisfied(answer) if _HAS_CORE
+            else bool(
+                re.search(r'\[\w+[^\]]*\d{4}', answer) or
+                re.search(r'https?://', answer) or
+                re.search(r'\(\d{4}\)', answer) or
+                re.search(r'doi:', answer, re.I)
+            )
         )
-        if not has_citation:
+        if not citation_ok:
             print(f"[research/L3] citation contract failed — retrying with citation directive")
             directive = (
-                "CITATION REQUIRED: Your previous answer is missing source citations. "
-                "Please revise: include at least 2 citations in the format "
-                "[Author et al., Year] or provide URLs. Do not invent sources — "
-                "if you cannot cite, state 'Source: not found via available tools'."
+                CitationContract.directive() if _HAS_CORE else
+                "CITATION REQUIRED: Include at least 2 citations in [Author et al., Year] or URL format."
             )
             answer, conversation, extra_tools = await _execute(
                 answer,
@@ -509,11 +526,15 @@ async def _reflect(
             tool_count += extra_tools
 
     # ── Self-reflection: short answer after tool use ──────────────────────────
-    if tool_count > 0 and len(answer) < 100 and not re.search(r'error|failed|not found', answer, re.I):
+    depth_ok = (
+        DepthContract.satisfied(answer) if _HAS_CORE
+        else (len(answer) >= 100 or bool(re.search(r'error|failed|not found', answer, re.I)))
+    )
+    if tool_count > 0 and not depth_ok:
         print(f"[research/reflect] short answer after tool use ({len(answer)} chars) — requesting depth")
         directive = (
-            "Your response is too brief. Please provide a comprehensive answer "
-            "with specific details, data, and proper citations from the sources you retrieved."
+            DepthContract.directive() if _HAS_CORE else
+            "Your response is too brief. Provide a comprehensive answer with specific details and citations."
         )
         answer, conversation, extra_tools = await _execute(
             answer,
