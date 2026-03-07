@@ -160,7 +160,13 @@ docker run -e ANTHROPIC_API_KEY=sk-ant-... \
 - **Runtime:** Python 3.11 · FastAPI · uvicorn
 - **LLM:** claude-haiku-4-5-20251001 (DAAO fast path) · claude-sonnet-4-6 (synthesis, multi-source)
 - **Architecture:** BrainOS PRIME / EXECUTE / REFLECT
-- **Core library:** [brainos-core-light](https://github.com/abhishec/brainoscorelight) — shared primitives (Brain, Router, UCB1, RL)
+- **Core library:** [brainos-core-light](https://github.com/abhishec/brainoscorelight) v0.3.0
+  - `DAAO` — zero-LLM model routing (Haiku simple lookups, Sonnet synthesis)
+  - `CitationContract` — L3 deterministic citation enforcement
+  - `DepthContract` — self-reflection depth retry
+  - `SequenceHints` — prefix-based tool directives (academic/news/technical/code)
+  - `RecoveryCascade` — automatic empty-result recovery
+  - `Brain` + `Router` — UCB1 strategy bandit + 5-layer memory
 - **RL:** Case log (JSON) · quality scoring · RL primer injection
 - **Tool bridge:** MCP HTTP with pre-flight validation
 - **Protocol:** A2A JSON-RPC 2.0
