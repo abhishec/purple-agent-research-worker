@@ -7,8 +7,8 @@ GREEN_AGENT_MCP_URL: str = os.environ.get("GREEN_AGENT_MCP_URL", "http://green-a
 PORT: int = int(os.environ.get("PORT", "9010"))
 
 # Model selection
-FAST_MODEL: str = os.environ.get("FAST_MODEL", "claude-haiku-4-5")
-MAIN_MODEL: str = os.environ.get("MAIN_MODEL", "claude-sonnet-4-5")
+FAST_MODEL: str = os.environ.get("FAST_MODEL", "claude-haiku-4-5-20251001")
+MAIN_MODEL: str = os.environ.get("MAIN_MODEL", "claude-sonnet-4-6")
 
 # Timeouts
 TOOL_TIMEOUT: int = int(os.environ.get("TOOL_TIMEOUT", "60"))
